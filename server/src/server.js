@@ -2,46 +2,43 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-const healthRoutes = require("./routes/healthRoutes");
-const projectRoutes = require("./routes/projectRoutes");
-const taskRoutes = require("./routes/taskRoutes");
+const pool = require("./config/database");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
-// =========================
 // Middleware
-// =========================
-
 app.use(cors());
 app.use(express.json());
 
-// =========================
 // Routes
-// =========================
+app.use("/api/auth", authRoutes);
 
-app.use("/api/health", healthRoutes);
+// Health check
+app.get("/api/health", async (req, res) => {
+    try {
+        const result = await pool.query("SELECT NOW()");
 
-app.use("/api/projects", projectRoutes);
+        res.json({
+            success: true,
+            message: "Nexora API is running 🚀",
+            database: "connected",
+            time: result.rows[0].now
+        });
 
-app.use("/api/tasks", taskRoutes);
+    } catch (error) {
+        console.error("Database error:", error);
 
-// =========================
-// Root route
-// =========================
-
-app.get("/", (req, res) => {
-    res.json({
-        success: true,
-        message: "Welcome to Nexora API 🚀",
-    });
+        res.status(500).json({
+            success: false,
+            message: "Database connection failed"
+        });
+    }
 });
 
-// =========================
 // Start server
-// =========================
-
 app.listen(PORT, () => {
-    console.log(`Nexora API running on http://localhost:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
 });
