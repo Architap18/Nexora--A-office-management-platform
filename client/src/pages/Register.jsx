@@ -6,6 +6,7 @@ function Register() {
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
+        name: "",
         phoneNumber: "",
         email: "",
         username: "",
@@ -64,6 +65,24 @@ function Register() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
+
+                        {/* Name */}
+
+                        <div>
+                            <label className="block text-sm font-medium text-zinc-700 mb-2">
+                                Full Name
+                            </label>
+
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                placeholder="Jane Doe"
+                                className="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-zinc-900"
+                                required
+                            />
+                        </div>
 
                         {/* Phone */}
 

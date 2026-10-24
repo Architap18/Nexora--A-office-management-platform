@@ -1,85 +1,74 @@
-const API_BASE_URL = "http://localhost:5001/api";
+
+const API_BASE_URL = (
+    import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api"
+).replace(/\/+$/, "");
+
+async function request(endpoint, options = {}) {
+    let user = null;
+
+    try {
+        user = JSON.parse(localStorage.getItem("nexoraUser") || "null");
+    } catch {
+        localStorage.removeItem("nexoraUser");
+    }
+
+    const normalizedEndpoint = endpoint.startsWith("/")
+        ? endpoint
+        : `/${endpoint}`;
+
+    const headers = {
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(user?.id ? { "x-user-id": String(user.id) } : {}),
+        ...options.headers,
+    };
+
+    let response;
+
+    try {
+        response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
+            ...options,
+            headers,
+        });
+    } catch {
+        throw new Error(
+            `Cannot connect to the backend at ${API_BASE_URL}. Check that the server is running.`
+        );
+    }
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || `Request failed with status ${response.status}`
+        );
+    }
+
+    return data;
+}
 
 const api = {
-    async get(endpoint) {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`);
+    get: (endpoint) => request(endpoint),
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || "Request failed");
-        }
-
-        return data;
-    },
-
-    async post(endpoint, body) {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    post: (endpoint, body) =>
+        request(endpoint, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify(body),
-        });
+        }),
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || "Request failed");
-        }
-
-        return data;
-    },
-
-    async put(endpoint, body) {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    put: (endpoint, body) =>
+        request(endpoint, {
             method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify(body),
-        });
+        }),
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || "Request failed");
-        }
-
-        return data;
-    },
-
-    async patch(endpoint, body) {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    patch: (endpoint, body) =>
+        request(endpoint, {
             method: "PATCH",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify(body),
-        });
+        }),
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || "Request failed");
-        }
-
-        return data;
-    },
-
-    async delete(endpoint) {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: "DELETE",
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || "Request failed");
-        }
-
-        return data;
-    },
+    delete: (endpoint) =>
+        request(endpoint, { method: "DELETE" }),
 };
 
 export default api;

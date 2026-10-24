@@ -1,159 +1,253 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import {
-    FolderKanban,
-    Users,
-    CheckCircle2,
-} from "lucide-react";
 
-import api from "../services/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+
+import {
+    getProjects,
+    createProject,
+    deleteProject,
+} from "../services/projectService";
 
 function Projects() {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const createFormRef = useRef(null);
+    const nameInputRef = useRef(null);
 
     const [projects, setProjects] = useState([]);
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    useEffect(() => {
+    const loadProjects = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError("");
 
-        const fetchProjects = async () => {
-
-            try {
-
-                const response = await api.get("/projects");
-
-                setProjects(response.data.projects);
-
-            } catch (error) {
-
-                console.error("Failed to fetch projects:", error);
-
-                setError("Unable to load projects.");
-
-            } finally {
-
-                setLoading(false);
-
-            }
-
-        };
-
-        fetchProjects();
-
+            const data = await getProjects();
+            setProjects(data.projects || []);
+        } catch (err) {
+            setError(err.message || "Failed to load projects.");
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
-    if (loading) {
-        return <h2>Loading projects...</h2>;
-    }
+    useEffect(() => {
+        let cancelled = false;
 
-    if (error) {
-        return <h2>{error}</h2>;
-    }
+        const fetchProjects = async () => {
+            try {
+                const data = await getProjects();
+
+                if (!cancelled) {
+                    setProjects(data.projects || []);
+                    setError("");
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setError(err.message || "Failed to load projects.");
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        void fetchProjects();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!location.state?.openCreate) return;
+
+        const timer = setTimeout(() => {
+            createFormRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+            });
+
+            nameInputRef.current?.focus();
+        }, 100);
+
+        navigate("/projects", {
+            replace: true,
+            state: {},
+        });
+
+        return () => clearTimeout(timer);
+    }, [location.state, navigate]);
+
+    const handleCreate = async (event) => {
+        event.preventDefault();
+
+        if (!name.trim()) {
+            setError("Please enter a project name.");
+            return;
+        }
+
+        try {
+            setError("");
+
+            await createProject({
+                name: name.trim(),
+                description: description.trim(),
+            });
+
+            setName("");
+            setDescription("");
+
+            await loadProjects();
+        } catch (err) {
+            setError(err.message || "Failed to create project.");
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this project?")) {
+            return;
+        }
+
+        try {
+            setError("");
+            await deleteProject(id);
+
+            setProjects((current) =>
+                current.filter((project) => project.id !== id)
+            );
+        } catch (err) {
+            setError(err.message || "Failed to delete project.");
+        }
+    };
 
     return (
         <div>
-
-            <div className="flex items-end justify-between mb-[28px]">
-
+            <div className="mb-8 flex items-center justify-between">
                 <div>
-                    <p className="text-[10px] text-[#71717a] tracking-[0.1em] font-bold m-0 mb-2 uppercase">
-                        WORKSPACE
-                    </p>
+                    <h1 className="text-2xl font-bold text-zinc-900">
+                        Projects
+                    </h1>
 
-                    <h1 className="m-0 text-[30px] font-bold tracking-[-0.04em] text-[#18181b]">Projects</h1>
-
-                    <p className="text-[#71717a] mt-[7px] mb-0 text-[13px]">
-                        Manage your team's projects and progress.
+                    <p className="mt-1 text-sm text-zinc-500">
+                        Manage your projects and tasks.
                     </p>
                 </div>
 
-                <button className="border-0 bg-[#18181b] hover:bg-[#27272a] text-white rounded-lg px-3.5 py-[9px] text-[13px] font-semibold transition cursor-pointer">
-                    + New project
-                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        createFormRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                        });
 
+                        nameInputRef.current?.focus();
+                    }}
+                    className="rounded-lg bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+                >
+                    + New Project
+                </button>
             </div>
 
-            <div className="grid grid-cols-3 max-[1000px]:grid-cols-2 max-[700px]:grid-cols-1 gap-[16px]">
+            <form
+                ref={createFormRef}
+                onSubmit={handleCreate}
+                className="mb-8 rounded-xl border border-zinc-200 bg-white p-6"
+            >
+                <h2 className="mb-4 text-lg font-semibold text-zinc-800">
+                    Create New Project
+                </h2>
 
-                {projects.map((project) => {
+                <div className="grid gap-4 md:grid-cols-2">
+                    <input
+                        ref={nameInputRef}
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        placeholder="Project name"
+                        required
+                        className="rounded-lg border border-zinc-300 px-4 py-3 outline-none focus:border-zinc-900"
+                    />
 
-                    const progress =
-                        Math.round(
-                            (project.completedTasks /
-                                project.totalTasks) * 100
-                        );
+                    <input
+                        value={description}
+                        onChange={(event) =>
+                            setDescription(event.target.value)
+                        }
+                        placeholder="Short description"
+                        className="rounded-lg border border-zinc-300 px-4 py-3 outline-none focus:border-zinc-900"
+                    />
+                </div>
 
-                    const colorClass =
-                        project.color === "blue"
-                            ? "bg-[#dbeafe] text-[#2563eb]"
-                            : project.color === "green"
-                            ? "bg-[#dcfce7] text-[#16a34a]"
-                            : "bg-[#f3e8ff] text-[#9333ea]";
+                <button
+                    type="submit"
+                    className="mt-4 rounded-lg bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+                >
+                    + Create Project
+                </button>
+            </form>
 
-                    return (
-                        <Link
-                            to={`/projects/${project.id}`}
-                            className="block bg-white border border-[#e4e4e7] rounded-[12px] p-5 transition duration-200 hover:border-[#a1a1aa] hover:-translate-y-0.5"
+            {error && (
+                <div
+                    role="alert"
+                    className="mb-5 rounded-lg bg-red-50 p-4 text-sm text-red-600"
+                >
+                    {error}
+                </div>
+            )}
+
+            {loading ? (
+                <p className="text-zinc-500">Loading projects...</p>
+            ) : projects.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center">
+                    <p className="text-zinc-500">
+                        No projects yet. Create your first project!
+                    </p>
+                </div>
+            ) : (
+                <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                    {projects.map((project) => (
+                        <div
                             key={project.id}
+                            className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm"
                         >
-
-                            <div className="flex justify-between items-center">
-
-                                <div className={`w-[35px] h-[35px] rounded-[9px] flex items-center justify-center font-bold ${colorClass}`}>
-                                    <FolderKanban size={20} />
-                                </div>
-
-                                <span className="text-[#a1a1aa] text-sm">
-                                    ↗
-                                </span>
-
-                            </div>
-
-                            <h3 className="m-0 mt-[18px] mb-[5px] text-[15px] font-semibold text-[#18181b]">
+                            <h2 className="text-lg font-semibold text-zinc-900">
                                 {project.name}
-                            </h3>
+                            </h2>
 
-                            <p className="text-[#71717a] text-xs m-0 mb-[20px]">
-                                {project.description}
+                            <p className="mt-2 min-h-[40px] text-sm text-zinc-500">
+                                {project.description ||
+                                    "No description provided."}
                             </p>
 
-                            <div className="flex gap-[15px] text-[#71717a] text-[11px] mb-[16px]">
+                            <div className="mt-5 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        navigate(`/projects/${project.id}`)
+                                    }
+                                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white hover:bg-zinc-800"
+                                >
+                                    Open
+                                </button>
 
-                                <span className="flex items-center gap-[5px]">
-                                    <Users size={15} />
-                                    {project.members}
-                                </span>
-
-                                <span className="flex items-center gap-[5px]">
-                                    <CheckCircle2 size={15} />
-                                    {project.completedTasks}/
-                                    {project.totalTasks}
-                                </span>
-
+                                <button
+                                    type="button"
+                                    onClick={() => handleDelete(project.id)}
+                                    className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                >
+                                    Delete
+                                </button>
                             </div>
-
-                            <div className="h-[5px] bg-[#f4f4f5] rounded-[10px] overflow-hidden">
-
-                                <div
-                                    className="h-full bg-[#18181b] rounded-[inherit] transition-all duration-300"
-                                    style={{
-                                        width: `${progress}%`,
-                                    }}
-                                />
-
-                            </div>
-
-                            <small className="block mt-[7px] text-[#a1a1aa] text-[10px]">
-                                {progress}% completed
-                            </small>
-
-                        </Link>
-                    );
-
-                })}
-
-            </div>
-
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

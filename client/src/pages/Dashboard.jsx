@@ -1,234 +1,376 @@
+
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-    CheckSquare,
-    FolderKanban,
-    Clock3,
-    Users,
-    ArrowRight,
-    CalendarDays,
+  CheckSquare,
+  FolderKanban,
+  Clock3,
+  Users,
+  ArrowRight,
+  CalendarDays,
 } from "lucide-react";
 
+import { useAuthContext } from "../context/AuthContext";
 import StatCard from "../components/StatCard";
 import ProjectCard from "../components/ProjectCard";
 import TaskCard from "../components/dashboard/TaskCard";
-import ActivityItem from "../components/dashboard/ActivityItem";
+import api from "../services/api";
+
+function getGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function formatDate() {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 function Dashboard() {
-    return (
-        <div className="space-y-7">
+  const navigate = useNavigate();
+  const { user } = useAuthContext();
 
-            {/* Header */}
+  const [stats, setStats] = useState({
+    activeProjects: 0,
+    totalTasks: 0,
+    tasksDueSoon: 0,
+    teamMembers: 0,
+  });
 
-            <div className="flex items-end justify-between mb-[28px]">
+  const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
 
-                <div>
-                    <p className="text-[10px] text-[#71717a] tracking-[0.1em] font-bold m-0 mb-2 uppercase">
-                        Monday, August 30
-                    </p>
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingTasks, setLoadingTasks] = useState(true);
 
-                    <h1 className="m-0 text-[30px] font-bold tracking-[-0.04em] text-[#18181b]">
-                        Good evening, Alex
-                    </h1>
+  const [statsError, setStatsError] = useState("");
+  const [projectsError, setProjectsError] = useState("");
+  const [tasksError, setTasksError] = useState("");
 
-                    <p className="text-[#71717a] mt-[7px] mb-0 text-[13px]">
-                        Here's what's happening across your workspace.
-                    </p>
-                </div>
+  useEffect(() => {
+    let cancelled = false;
 
-                <button className="flex items-center gap-2 border border-[#e4e4e7] bg-white rounded-lg px-3.5 py-2 text-xs font-semibold text-[#18181b] hover:bg-gray-50 transition cursor-pointer">
-                    <CalendarDays size={17} />
-                    This week
-                </button>
+    async function loadDashboard() {
+      try {
+        const data = await api.get("/users/dashboard/stats");
 
-            </div>
+        if (!data.success) {
+          throw new Error(data.message || "Could not load dashboard stats.");
+        }
 
-            {/* Stats */}
+        if (!cancelled) {
+          setStats((previous) => ({
+            ...previous,
+            ...data.stats,
+          }));
+          setStatsError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatsError(
+            error.message || "Failed to load dashboard statistics."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingStats(false);
+        }
+      }
 
-            <div className="grid grid-cols-4 max-[1000px]:grid-cols-2 max-[700px]:grid-cols-1 gap-[14px] mb-[18px]">
+      try {
+        const data = await api.get("/projects");
 
-                <StatCard
-                    title="My Tasks"
-                    value="24"
-                    description="8 due this week"
-                    icon={CheckSquare}
-                    trend="+12%"
-                />
+        if (!data.success) {
+          throw new Error(data.message || "Could not load projects.");
+        }
 
-                <StatCard
-                    title="Active Projects"
-                    value="6"
-                    description="2 need attention"
-                    icon={FolderKanban}
-                    trend="+2"
-                />
+        if (!cancelled) {
+          setProjects(
+            Array.isArray(data.projects) ? data.projects.slice(0, 3) : []
+          );
+          setProjectsError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setProjectsError(error.message || "Failed to load projects.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingProjects(false);
+        }
+      }
 
-                <StatCard
-                    title="Time Tracked"
-                    value="31h 42m"
-                    description="This week"
-                    icon={Clock3}
-                    trend="+8%"
-                />
+      try {
+        const data = await api.get("/users/me/tasks");
 
-                <StatCard
-                    title="Team Members"
-                    value="18"
-                    description="3 online now"
-                    icon={Users}
-                />
+        if (!data.success) {
+          throw new Error(data.message || "Could not load your tasks.");
+        }
 
-            </div>
+        if (!cancelled) {
+          setTasks(
+            Array.isArray(data.tasks) ? data.tasks.slice(0, 4) : []
+          );
+          setTasksError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTasksError(error.message || "Failed to load your tasks.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingTasks(false);
+        }
+      }
+    }
 
-            {/* Projects */}
+    loadDashboard();
 
-            <section className="mb-7">
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-                <div className="flex items-center justify-between mb-4">
+  const firstName =
+    user?.name?.trim().split(/\s+/)[0] ||
+    user?.username ||
+    "there";
 
-                    <div>
-                        <h2 className="text-[15px] font-bold text-[#18181b] m-0 mb-1">Active Projects</h2>
-                        <p className="text-[11px] text-[#a1a1aa] m-0">Keep track of your team's progress.</p>
-                    </div>
+  return (
+    <div className="space-y-7">
+      {/* Header */}
+      <div className="mb-[28px] flex items-end justify-between gap-4">
+        <div>
+          <p className="m-0 mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#71717a]">
+            {formatDate()}
+          </p>
 
-                    <button className="flex items-center gap-1 border-0 bg-transparent text-[11px] text-[#52525b] hover:text-[#18181b] font-medium cursor-pointer transition">
-                        View all
-                        <ArrowRight size={16} />
-                    </button>
+          <h1 className="m-0 text-[30px] font-bold tracking-[-0.04em] text-[#18181b]">
+            {getGreeting()}, {firstName}
+          </h1>
 
-                </div>
-
-                <div className="grid grid-cols-3 max-[1000px]:grid-cols-2 max-[700px]:grid-cols-1 gap-4">
-
-                    <ProjectCard
-                        name="Website Redesign"
-                        description="Revamp the company website and improve conversion."
-                        color="#8b5cf6"
-                        progress={72}
-                        tasks={24}
-                        members={["AP", "RK", "SM", "JD"]}
-                    />
-
-                    <ProjectCard
-                        name="Mobile App"
-                        description="Build the next generation mobile experience."
-                        color="#3b82f6"
-                        progress={48}
-                        tasks={38}
-                        members={["RK", "SM", "NT"]}
-                    />
-
-                    <ProjectCard
-                        name="Marketing Campaign"
-                        description="Launch Q3 product marketing campaign."
-                        color="#22c55e"
-                        progress={85}
-                        tasks={16}
-                        members={["AP", "JD", "MK"]}
-                    />
-
-                </div>
-
-            </section>
-
-            {/* Bottom Grid */}
-
-            <div className="grid grid-cols-[1.4fr_1fr] max-[1000px]:grid-cols-1 gap-[18px]">
-
-                <section className="bg-white border border-[#e4e4e7] rounded-[12px] overflow-hidden p-5">
-
-                    <div className="flex items-center justify-between mb-4">
-
-                        <div>
-                            <h2 className="text-[15px] font-bold text-[#18181b] m-0 mb-1">My Tasks</h2>
-                            <p className="text-[11px] text-[#a1a1aa] m-0">Your upcoming work.</p>
-                        </div>
-
-                        <button className="flex items-center gap-1 border-0 bg-transparent text-[11px] text-[#52525b] hover:text-[#18181b] font-medium cursor-pointer transition">
-                            View all
-                            <ArrowRight size={16} />
-                        </button>
-
-                    </div>
-
-                    <div className="-mx-5 -mb-5">
-
-                        <TaskCard
-                            title="Finalize landing page design"
-                            project="Website Redesign"
-                            priority="High"
-                        />
-
-                        <TaskCard
-                            title="Implement authentication flow"
-                            project="Mobile App"
-                            priority="Medium"
-                        />
-
-                        <TaskCard
-                            title="Review campaign analytics"
-                            project="Marketing Campaign"
-                            priority="Low"
-                        />
-
-                        <TaskCard
-                            title="Create responsive navigation"
-                            project="Website Redesign"
-                            priority="High"
-                            completed
-                        />
-
-                    </div>
-
-                </section>
-
-                <section className="bg-white border border-[#e4e4e7] rounded-[12px] overflow-hidden p-5">
-
-                    <div className="flex items-center justify-between mb-4">
-
-                        <div>
-                            <h2 className="text-[15px] font-bold text-[#18181b] m-0 mb-1">Recent Activity</h2>
-                            <p className="text-[11px] text-[#a1a1aa] m-0">Latest workspace updates.</p>
-                        </div>
-
-                    </div>
-
-                    <div className="-mx-5 -mb-5">
-
-                        <ActivityItem
-                            avatar="RK"
-                            name="Riya"
-                            action="completed a task in Website Redesign"
-                            time="12 minutes ago"
-                        />
-
-                        <ActivityItem
-                            avatar="SM"
-                            name="Sam"
-                            action="commented on Authentication Flow"
-                            time="34 minutes ago"
-                        />
-
-                        <ActivityItem
-                            avatar="JD"
-                            name="John"
-                            action="joined Mobile App"
-                            time="1 hour ago"
-                        />
-
-                        <ActivityItem
-                            avatar="MK"
-                            name="Maya"
-                            action="created a new task"
-                            time="2 hours ago"
-                        />
-
-                    </div>
-
-                </section>
-
-            </div>
-
+          <p className="mb-0 mt-[7px] text-[13px] text-[#71717a]">
+            Here's what's happening across your workspace.
+          </p>
         </div>
-    );
+
+        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-[#e4e4e7] bg-white px-3.5 py-2 text-xs font-semibold text-[#18181b]">
+          <CalendarDays size={17} />
+          This week
+        </div>
+      </div>
+
+      {/* Dashboard statistics */}
+      {statsError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+        >
+          <p>{statsError}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-1 font-semibold underline"
+          >
+            Reload dashboard
+          </button>
+        </div>
+      )}
+
+      <div className="mb-[18px] grid grid-cols-4 gap-[14px] max-[1000px]:grid-cols-2 max-[700px]:grid-cols-1">
+        <StatCard
+          title="My Tasks"
+          value={loadingStats ? "…" : String(stats.totalTasks)}
+          description={
+            loadingStats ? "Loading..." : `${stats.tasksDueSoon} due soon`
+          }
+          icon={CheckSquare}
+        />
+
+        <StatCard
+          title="Active Projects"
+          value={loadingStats ? "…" : String(stats.activeProjects)}
+          description="In your workspace"
+          icon={FolderKanban}
+        />
+
+        <StatCard
+          title="Tasks Due Soon"
+          value={loadingStats ? "…" : String(stats.tasksDueSoon)}
+          description="Within 7 days"
+          icon={Clock3}
+        />
+
+        <StatCard
+          title="Team Members"
+          value={loadingStats ? "…" : String(stats.teamMembers)}
+          description="Workspace members"
+          icon={Users}
+        />
+      </div>
+
+      {/* Recent projects */}
+      <section className="mb-7">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="m-0 mb-1 text-[15px] font-bold text-[#18181b]">
+              Active Projects
+            </h2>
+            <p className="m-0 text-[11px] text-[#a1a1aa]">
+              Keep track of your team's progress.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate("/projects")}
+            className="flex items-center gap-1 border-0 bg-transparent text-[11px] font-medium text-[#52525b] transition hover:text-[#18181b]"
+          >
+            View all
+            <ArrowRight size={16} />
+          </button>
+        </div>
+
+        {loadingProjects ? (
+          <p className="text-sm text-zinc-400">Loading projects...</p>
+        ) : projectsError ? (
+          <div
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            {projectsError}
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center">
+            <p className="text-sm text-zinc-500">
+              No projects found in your workspace.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/projects")}
+              className="mt-3 text-sm font-medium text-zinc-700 hover:underline"
+            >
+              Explore projects →
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4 max-[1000px]:grid-cols-2 max-[700px]:grid-cols-1">
+            {projects.map((project) => (
+              <div
+                key={project.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/projects/${project.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    navigate(`/projects/${project.id}`);
+                  }
+                }}
+                className="cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+              >
+                <ProjectCard
+                  name={project.name}
+                  description={
+                    project.description || "No description provided."
+                  }
+                  color={project.color || "#8b5cf6"}
+                  progress={0}
+                  tasks={0}
+                  members={[]}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Tasks and activity */}
+      <div className="grid grid-cols-[1.4fr_1fr] gap-[18px] max-[1000px]:grid-cols-1">
+        <section className="overflow-hidden rounded-[12px] border border-[#e4e4e7] bg-white p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="m-0 mb-1 text-[15px] font-bold text-[#18181b]">
+                My Tasks
+              </h2>
+              <p className="m-0 text-[11px] text-[#a1a1aa]">
+                Your upcoming work.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/tasks")}
+              className="flex items-center gap-1 border-0 bg-transparent text-[11px] font-medium text-[#52525b] transition hover:text-[#18181b]"
+            >
+              View all
+              <ArrowRight size={16} />
+            </button>
+          </div>
+
+          <div className="-mx-5 -mb-5">
+            {loadingTasks ? (
+              <p className="p-5 text-sm text-zinc-400">
+                Loading tasks...
+              </p>
+            ) : tasksError ? (
+              <p role="alert" className="p-5 text-sm text-red-600">
+                {tasksError}
+              </p>
+            ) : tasks.length === 0 ? (
+              <p className="p-5 text-center text-sm text-zinc-400">
+                No tasks assigned to you yet.
+              </p>
+            ) : (
+              tasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  title={task.title}
+                  project={task.project_name || "No project"}
+                  priority={
+                    task.priority === "urgent" || task.priority === "high"
+                      ? "High"
+                      : task.priority === "medium"
+                        ? "Medium"
+                        : "Low"
+                  }
+                  completed={task.status === "done"}
+                />
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-[12px] border border-[#e4e4e7] bg-white p-5">
+          <div className="mb-4">
+            <h2 className="m-0 mb-1 text-[15px] font-bold text-[#18181b]">
+              Recent Activity
+            </h2>
+            <p className="m-0 text-[11px] text-[#a1a1aa]">
+              Latest workspace updates.
+            </p>
+          </div>
+
+          <div className="px-2 py-8 text-center">
+            <p className="text-sm text-zinc-500">
+              Activity tracking is not connected yet.
+            </p>
+            <p className="text-xs text-zinc-400">
+              Recent project and task activity will appear here once the
+              activity API is implemented.
+            </p>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
 }
 
 export default Dashboard;

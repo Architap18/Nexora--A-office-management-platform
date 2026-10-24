@@ -1,9 +1,7 @@
-import { Outlet } from "react-router-dom";
-
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
-function DashboardLayout() {
+function DashboardLayout({ children }) {
     return (
         <div className="flex min-h-screen">
 
@@ -14,7 +12,7 @@ function DashboardLayout() {
                 <Topbar />
 
                 <main className="p-[25px_18px] min-[701px]:px-10 min-[701px]:py-8 max-w-[1500px]">
-                    <Outlet />
+                    {children}
                 </main>
 
             </div>
